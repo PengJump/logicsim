@@ -2,8 +2,8 @@
 
 把**逆波兰（后缀）逻辑表达式**翻译成由**二选一选择器（MUX）**构成的判决网络图的纯前端小工具。
 
-- 在线访问（GitLab Pages）：`<部署后填写>`
-- 源码仓库：`<部署后填写>`
+- 线上地址：<https://pengjump.github.io/logicsim/>（GitHub Pages）
+- 源码仓库：<https://github.com/PengJump/logicsim>
 
 ---
 
@@ -21,7 +21,7 @@
 
 ![锁存器示例](docs/screenshots/latch-example.png)
 
-> 注：`docs/` 只用于项目说明，GitLab Pages 只发布 `public/` 目录，因此这些截图不会增加线上站点的体积。
+> 注：`docs/` 只用于项目说明；线上站点发布的是 `gh-pages` 分支（由 `public/` 生成），因此这些截图不会增加线上站点的体积。
 
 ---
 
@@ -96,9 +96,9 @@ python -m http.server 8099 --directory public
 
 ```
 logicsim/
-├── .gitlab-ci.yml          # GitLab Pages 部署配置（把 public/ 作为产物发布）
+├── .gitlab-ci.yml          # 备选方案：GitLab Pages 的部署配置（本项目实际用 GitHub Pages）
 ├── README.md
-└── public/                 # ← 部署根目录（GitLab Pages 约定）
+└── public/                 # ← 站点源码目录（发布到 gh-pages 分支）
     ├── index.html          # 页面结构
     ├── style.css           # 主题样式（Bootstrap 5 之上的自定义层）
     ├── ui.js               # 现代 UI 组件层（主题 / 提示 / 示例 / 快捷键）
@@ -170,11 +170,11 @@ logicsim/
 
 ---
 
-## 五、部署（GitLab Pages）
+## 五、部署（GitHub Pages）
 
-仓库根目录的 `.gitlab-ci.yml` 已配置好：CI 使用 `busybox`，不做任何构建，直接把 `public/` 作为产物发布到 GitLab Pages。
+站点源码保留在 `main` 分支的 `public/` 目录，另有一个 **`gh-pages` 分支**（内容就是把 `public/` 平铺到分支根目录）。GitHub Pages 直接从这个分支的根目录发布，**不需要任何 CI 配置**。
 
-推送到默认分支后，访问 `https://<用户名>.gitlab.io/<项目名>/` 即可。
+部署方式：仓库 **Settings → Pages → Source: Deploy from a branch → 分支 `gh-pages` → 目录 `/ (root)`**。注意 GitHub 免费版的 Pages **只支持公开仓库**（私有仓库需要 Pro 订阅）。
 
 ---
 
