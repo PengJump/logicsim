@@ -336,11 +336,15 @@ paper.on({
         ERHighlightLink(ERKeyNow);
 
         var ERName = document.getElementById("ERName");
-        ERName.value = JSON.stringify(elementView.model.attr().label.text.split("\n"));
+        // 改造点：直接显示标签文本本身，不再要求用户看懂 JSON 数组
+        ERName.value = elementView.model.attr().label.text;
         //ERName.style = "width:" + ERName.value.length * 0.5 + "em";
 
         var ERMemo = document.getElementById("ERMemo");
-        ERMemo.value = elementView.model.attr().name.text;
+        // 优先显示已保存的备注，没有备注时回退到节点名称（保持原行为）
+        ERMemo.value = elementView.model.attr().label.memo
+            || elementView.model.attr().name.text
+            || "";
 
     },
     'cell:mouseleave': function (cellView) {
@@ -466,6 +470,8 @@ appResize.on({
 })
 
 app.ResizeBlock = function () {
+    /* 改造点：原来通过替换手柄的 background-image 来指示方向，
+       现在改为切换 .panel-collapsed 类，图标方向由 CSS 控制。 */
     if (rightContainer.width() < 280) {
         appResize.css({
             right: 300
@@ -476,7 +482,7 @@ app.ResizeBlock = function () {
         mainContainer.css({
             right: 306
         });
-        appResize.children().css({ "background-image": "url(assets/box-arrow-in-right.svg)" });
+        $(".joint-app").removeClass("panel-collapsed");
     } else {
         appResize.css({
             right: 0
@@ -487,7 +493,7 @@ app.ResizeBlock = function () {
         mainContainer.css({
             right: 6
         });
-        appResize.children().css({ "background-image": "url(assets/box-arrow-in-left.svg)" });
+        $(".joint-app").addClass("panel-collapsed");
     }
 }
 
@@ -519,6 +525,10 @@ app.makeNode = function (theKey, theLabel, theName, theColor, theImgPath, thePor
     var theHeight = 100;
     return new joint.shapes.standard.Rectangle({
         id: theKey,
+        /* 改造点：把「节点类型」与「显示标签」分离。
+           标签可以被用户改名，类型用于图 ↔ JSON 的往返，避免改名后
+           ELDump 把标签误当成类型、导致「图转文本」结果被破坏。 */
+        nodeType: theLabel,
         size: { width: theWidth, height: theHeight },
         attrs: {
             label: {
@@ -547,6 +557,11 @@ app.makeNode = function (theKey, theLabel, theName, theColor, theImgPath, thePor
                 fontFamily: 'monospace',
                 fill: 'white',
                 fontWeight: 'bold'
+            },
+            /* 改造点：新增 SVG <title> 悬停提示，默认显示节点名称，
+               在右侧「保存修改」后显示元素备注。 */
+            memoTitle: {
+                text: theName && "" !== theName ? theName : theLabel
             }
         },
         markup: [
@@ -565,6 +580,10 @@ app.makeNode = function (theKey, theLabel, theName, theColor, theImgPath, thePor
             {
                 tagName: "image",
                 selector: "image"
+            },
+            {
+                tagName: 'title',
+                selector: 'memoTitle'
             },
             {
                 tagName: 'text',
@@ -742,16 +761,19 @@ app.ELDump = function (JsonCells) {
             });
         }
         else {
-            if("SEL" == oneElem.attrs.label.text){
+            /* 改造点：优先使用节点自身的类型标记，即使用户改过标签名，
+               图 ↔ JSON 往返也不会被破坏。 */
+            var nodeType = oneElem.nodeType || oneElem.attrs.label.text;
+            if ("SEL" == nodeType) {
                 result.nodeArray.push({
-                    "key":oneElem.id,
-                    "type":"SEL"
+                    "key": oneElem.id,
+                    "type": "SEL"
                 });
-            }else{
+            } else {
                 result.nodeArray.push({
-                    "key":oneElem.id,
-                    "type":oneElem.attrs.label.text,
-                    "name":oneElem.attrs.name.text
+                    "key": oneElem.id,
+                    "type": nodeType,
+                    "name": oneElem.attrs.name.text
                 });
             }
         }
@@ -913,62 +935,59 @@ app.saveTextAsFile = function () {
     };
 } */
 
-sheet3Node = $("#sheet3");
-
-
+/* 元素名称速填
+   改造点：原实现是 $("#sheet3").select2({...})，但页面中并不存在 #sheet3
+   这个元素，jQuery 对空集合静默无操作 —— 也就是说 select2 从未真正生效。
+   现在改由 ui.js 的 chips 组件（#elementNames）承担，这里只保留钩子，
+   供 app.load() 在每次载入模型后调用。 */
 app.UpdateOption = function () {
-    var ImportNames = new Set([]);
-    origin.nodeArray.forEach(function (theNode) {
-        if (undefined != theNode.name && "" != theNode.name) {
-            ImportNames.add(theNode.name);
-        }
-    })
-    ImportNames = Array.from(ImportNames);
-    sheet3Node.select2({
-        placeholder: "输入要查找的元素名称:",
-        data: ["sheet2Name1", "sheet2Name2"].concat(ImportNames),
-        multiple: false,
-        width: "17em"
-    });
-
+    if (window.LogicSimUI && "function" === typeof LogicSimUI.refreshFromModel) {
+        LogicSimUI.refreshFromModel();
+    }
 }
 
+/* 保存「元素名称 / 备注」修改
+   改造点：输入框由「必须填 JSON 数组」改为「每行一个名称」，
+   同时向下兼容直接粘贴旧格式的 JSON 数组。 */
 app.ChangeName = function () {
+    var raw = document.getElementById("ERName").value;
+    var names = null;
+
     try {
-        var sheets = JSON.parse(document.getElementById("ERName").value);
-    } catch (e) {
-        alert("Format Error");
-        return false;
-    }
-    if (!(sheets instanceof Array)) {
-        alert("Format Error");
-        return false;
-    };
-    if (0 == sheets.length) {
-        alert("Format Error");
-        return false;
-    }
-    var getArray = origin.nodeArray.filter(function (x) {
-        if ("Sheet" == x.type) {
-            for (z of sheets) {
-                if (0 != x.name.filter(function (y) { return z == y }).length) {
-                    return true;
-                }
-            }
+        var parsed = JSON.parse(raw);
+        if (parsed instanceof Array) {
+            names = parsed;
         }
-        return false;
-    });
-    if (getArray.length > 1) {
-        alert("Name Repeated in other Sheets");
-        return false;
-    } else {
-        var memoText = document.getElementById("ERMemo").value;
-        ERUnhighlight(ERKeyNow);
-        paper.findViewByModel(ERKeyNow).model.attr({
-            label: { text: sheets.join("\n"), memo: memoText }
-        });
-        app.save();
+    } catch (e) {
+        names = null;
     }
+    if (null === names) {
+        names = raw.split("\n")
+            .map(function (s) { return s.trim(); })
+            .filter(function (s) { return "" !== s; });
+    }
+    if (0 === names.length) {
+        alert("请至少填写一个元素名称");
+        return false;
+    }
+    if ("undefined" === typeof ERKeyNow || null === ERKeyNow) {
+        alert("请先在画布上单击选中一个元素");
+        return false;
+    }
+
+    var theView = paper.findViewByModel(ERKeyNow);
+    if (!theView) {
+        alert("选中的元素已不在画布上，请重新选择");
+        return false;
+    }
+
+    var memoText = document.getElementById("ERMemo").value;
+    ERUnhighlight(ERKeyNow);
+    theView.model.attr({
+        label: { text: names.join("\n"), memo: memoText },
+        memoTitle: { text: memoText || names.join(" / ") }
+    });
+    app.save();
 }
 
 
