@@ -155,22 +155,50 @@
         });
     }
 
-    // 在 app 的解析 / 载入 / 导出之后刷新 chips（不改动 ViewGen.js 内部实现）
+    /* ---------------- 4.1 空画布引导 ---------------- */
+
+    var canvasEmpty = $('canvasEmpty');
+
+    function refreshCanvasHint() {
+        if (!canvasEmpty) return;
+        var isEmpty = true;
+        try {
+            isEmpty = !(typeof graph !== 'undefined' && graph.getCells().length > 0);
+        } catch (e) {
+            isEmpty = true;
+        }
+        // 两种机制同时用：hidden 不依赖 Bootstrap，d-none 作为兜底
+        canvasEmpty.hidden = !isEmpty;
+        canvasEmpty.classList.toggle('d-none', !isEmpty);
+    }
+
+    // 在 app 的解析 / 载入 / 导出之后刷新 chips 与空画布引导（不改动 ViewGen.js 内部实现）
     ['parseLogic', 'load', 'save'].forEach(function (name) {
         var original = app[name];
         if (typeof original !== 'function') return;
         app[name] = function () {
             var result = original.apply(this, arguments);
             refreshChips();
+            refreshCanvasHint();
             return result;
         };
     });
 
+    // 用户在画布上删光所有元素时也要把引导显示回来
+    try {
+        if (typeof graph !== 'undefined' && graph.on) {
+            graph.on('add remove reset', refreshCanvasHint);
+        }
+    } catch (e) { /* 忽略 */ }
+
     var fileInput = $('fileToLoad');
     if (fileInput) {
-        fileInput.addEventListener('change', function () { setTimeout(refreshChips, 120); });
+        fileInput.addEventListener('change', function () {
+            setTimeout(function () { refreshChips(); refreshCanvasHint(); }, 120);
+        });
     }
     refreshChips();
+    refreshCanvasHint();
 
     /* ---------------- 5. 状态提示：徽标 + Toast ---------------- */
 

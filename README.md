@@ -7,6 +7,20 @@
 
 ---
 
+## 界面截图
+
+| 改造前 | 改造后 · 浅色 | 改造后 · 深色 |
+| --- | --- | --- |
+| ![改造前](docs/screenshots/before.png) | ![改造后-浅色](docs/screenshots/after-light.png) | ![改造后-深色](docs/screenshots/after-dark.png) |
+
+画布为空时会给出操作引导（也可以直接点上方「示例表达式」一键出图）：
+
+![空画布引导](docs/screenshots/after-empty.png)
+
+> 注：`docs/` 只用于项目说明，GitLab Pages 只发布 `public/` 目录，因此这些截图不会增加线上站点的体积。
+
+---
+
 ## 一、功能说明
 
 在「逆波兰逻辑表达式」文本框中输入表达式，点「解析文本」得到 JSON 图模型，再点「文本转图」即可得到电路图；「图转文本」可以反向导出。

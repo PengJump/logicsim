@@ -99,6 +99,12 @@ body {
 #mini-view {
     /* 具体样式由 ViewGen.js 在初始化时设置（边框/背景/光标） */
     z-index: 2;
+    /* 空模型时 paper 尺寸很小，ViewGen.js 的 miniScale = 300 / 宽度 会偏大，
+       算出的视口框远大于迷你地图并溢出到工具栏上（原项目靠 .app-header 的
+       overflow:hidden 掩盖了这个问题）。这里把视口框约束在迷你地图范围内：
+       正常出图时框很小，max-* 不会生效，仅兜住异常情况。 */
+    max-width: 100%;
+    max-height: 100%;
 }
 
 #mini-resize {
@@ -264,6 +270,32 @@ body {
     border: 1px solid var(--app-border);
     opacity: .85;
     pointer-events: none;
+}
+
+/* 空画布引导（画布上有元素时由 ui.js 隐藏） */
+.canvas-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 460px;
+    padding: 1.1rem 1.4rem;
+    border: 1px dashed var(--app-border);
+    border-radius: var(--app-radius);
+    background-color: var(--bs-body-bg);
+    color: var(--bs-secondary-color);
+    font-size: .84rem;
+    line-height: 1.7;
+    text-align: center;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.canvas-empty-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--bs-body-color);
+    margin-bottom: .35rem;
 }
 
 /* ---------------- 分隔条 / 面板折叠 ---------------- */
