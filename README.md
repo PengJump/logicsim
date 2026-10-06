@@ -17,6 +17,10 @@
 
 ![空画布引导](docs/screenshots/after-empty.png)
 
+仓库自带的手工示例 `latch.json`（两个 `SEL` 交叉反馈构成的锁存器）也能直接载入查看：
+
+![锁存器示例](docs/screenshots/latch-example.png)
+
 > 注：`docs/` 只用于项目说明，GitLab Pages 只发布 `public/` 目录，因此这些截图不会增加线上站点的体积。
 
 ---
