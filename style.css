@@ -1,0 +1,579 @@
+/* =============================================================
+   logicsim 主题样式
+   -------------------------------------------------------------
+   改造要点：
+   1. 用现代字体栈与 CSS 变量替代原 w3.css 风格，深浅主题跟随
+      Bootstrap 5 的 data-bs-theme（--bs-* 变量）自动切换；
+   2. 布局改为 flex 纵向外壳 + 主体内绝对定位面板，修正原项目
+      .app-body 高度写成 calc(100% - 60px) 而 header 为 150px
+      导致的 90px 溢出裁剪问题；
+   3. 迷你地图仍固定在页面左上角 300x150，因为 ViewGen.js 的
+      拖拽换算直接使用页面坐标，且 miniScale = 300 / 宽度。
+   ============================================================= */
+
+:root {
+    --app-statusbar-h: 40px;
+    --app-inspector-w: 300px;
+    --app-radius: 12px;
+    --app-header-bg: var(--bs-tertiary-bg);
+    --app-panel-bg: var(--bs-body-bg);
+    --app-surface-bg: var(--bs-secondary-bg);
+    --app-border: var(--bs-border-color);
+    --app-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 4px 16px rgba(0, 0, 0, .06);
+    --app-minimap-bg: rgba(150, 250, 200, .3);
+}
+
+html,
+body,
+.joint-app {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    /* 现代化字体栈：不再依赖 1.6MB 的中文字体文件 */
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC",
+        "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+    overflow: hidden;
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+/* 画布区域禁止选中文字（原来的 user-select:none 挂在 body 上，会让输入框也无法选中文本） */
+#paper,
+.mini-map {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+/* ---------------- 外壳：flex 纵向布局，杜绝高度溢出 ---------------- */
+
+.joint-app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.app-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: flex-start;
+    position: relative;
+    width: 100%;
+    background-color: var(--app-header-bg);
+    border-bottom: 1px solid var(--app-border);
+}
+
+.app-body {
+    flex: 1 1 auto;
+    position: relative;
+    min-height: 0;
+    height: auto;
+}
+
+/* ---------------- 迷你地图（必须固定在页面左上角） ---------------- */
+
+.mini-map {
+    flex: 0 0 300px;
+    position: relative;
+    width: 300px;
+    height: 150px;
+    padding: 0;
+    margin: 0;
+    /* 注意：这里不能加 border / padding，否则绝对定位子元素会整体偏移，
+       而 ViewGen.js 使用的是页面坐标 */
+}
+
+#mini-paper {
+    border-radius: var(--app-radius) 0 var(--app-radius) 0;
+    overflow: hidden;
+    box-shadow: var(--app-shadow);
+    background-color: var(--app-minimap-bg);
+}
+
+#mini-view {
+    /* 具体样式由 ViewGen.js 在初始化时设置（边框/背景/光标） */
+    z-index: 2;
+    /* 空模型时 paper 尺寸很小，ViewGen.js 的 miniScale = 300 / 宽度 会偏大，
+       算出的视口框远大于迷你地图并溢出到工具栏上（原项目靠 .app-header 的
+       overflow:hidden 掩盖了这个问题）。这里把视口框约束在迷你地图范围内：
+       正常出图时框很小，max-* 不会生效，仅兜住异常情况。 */
+    max-width: 100%;
+    max-height: 100%;
+}
+
+#mini-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 10px;
+    height: 10px;
+    cursor: nwse-resize;
+    margin: 0 -7px -7px 0;
+    border-radius: 50%;
+    border: 2px solid #31d0c6;
+    background-color: #fff;
+}
+
+/* ---------------- 工具栏 ---------------- */
+
+.title-container {
+    flex: 1 1 auto;
+    min-width: 0;
+    position: relative;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: auto;
+}
+
+.toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    padding: .6rem .9rem .7rem;
+}
+
+.toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+.toolbar-row-main {
+    flex-wrap: nowrap;
+    align-items: flex-end;
+}
+
+.toolbar-spacer {
+    flex: 1 1 auto;
+}
+
+.brand-badge {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .4rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    font-size: 1.05rem;
+}
+
+.brand-dot {
+    width: .55rem;
+    height: .55rem;
+    border-radius: 50%;
+    background-image: linear-gradient(135deg, #31d0c6, #7b5ea7);
+    display: inline-block;
+    align-self: center;
+}
+
+.brand-sub {
+    font-size: .75rem;
+    font-weight: 500;
+    color: var(--bs-secondary-color);
+}
+
+.file-name-group {
+    width: auto;
+    max-width: 260px;
+}
+
+.pipeline-step {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.pipeline-step-model {
+    flex: 1.25 1 0;
+}
+
+.pipeline-step .form-label {
+    margin-bottom: .15rem;
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+}
+
+.step-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.05rem;
+    height: 1.05rem;
+    margin-right: .3rem;
+    border-radius: 50%;
+    background-color: var(--bs-primary);
+    color: #fff;
+    font-size: .7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.pipeline-btn,
+.pipeline-btn-group {
+    flex: 0 0 auto;
+    align-self: flex-end;
+}
+
+.pipeline-btn {
+    height: 38px;
+    white-space: nowrap;
+}
+
+.pipeline-btn-group .btn {
+    white-space: nowrap;
+}
+
+/* 工具栏里的多行文本框固定高度，避免撑高页头 */
+.toolbar textarea.form-control {
+    resize: vertical;
+    min-height: 38px;
+}
+
+/* ---------------- 画布 ---------------- */
+
+.main-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: var(--app-inspector-w);
+    bottom: var(--app-statusbar-h);
+    overflow: hidden;
+    box-sizing: border-box;
+    background-color: var(--app-surface-bg);
+    border-right: 1px solid var(--app-border);
+}
+
+#paper-container {
+    /* 位置由 ViewGen.js 动态计算（left/top/position:absolute） */
+    overflow: hidden;
+    border-radius: var(--app-radius);
+}
+
+.canvas-hint {
+    position: absolute;
+    right: .6rem;
+    bottom: .5rem;
+    padding: .15rem .5rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    color: var(--bs-secondary-color);
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--app-border);
+    opacity: .85;
+    pointer-events: none;
+}
+
+/* 空画布引导（画布上有元素时由 ui.js 隐藏） */
+.canvas-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 460px;
+    padding: 1.1rem 1.4rem;
+    border: 1px dashed var(--app-border);
+    border-radius: var(--app-radius);
+    background-color: var(--bs-body-bg);
+    color: var(--bs-secondary-color);
+    font-size: .84rem;
+    line-height: 1.7;
+    text-align: center;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.canvas-empty-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--bs-body-color);
+    margin-bottom: .35rem;
+}
+
+/* ---------------- 分隔条 / 面板折叠 ---------------- */
+
+#app-resize {
+    position: absolute;
+    top: 0;
+    width: 8px;
+    right: var(--app-inspector-w);
+    bottom: var(--app-statusbar-h);
+    background-color: transparent;
+    cursor: ew-resize;
+    z-index: 5;
+}
+
+#app-resize::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background-color: var(--app-border);
+    transition: background-color .15s ease;
+}
+
+#app-resize:hover::before {
+    background-color: var(--bs-primary);
+}
+
+.resize-grip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid var(--app-border);
+    background-color: var(--bs-body-bg);
+    color: var(--bs-secondary-color);
+    box-shadow: var(--app-shadow);
+    cursor: pointer;
+}
+
+.resize-grip:hover {
+    color: var(--bs-primary);
+    border-color: var(--bs-primary);
+}
+
+.joint-app.panel-collapsed .right-container {
+    visibility: hidden;
+    overflow: hidden;
+}
+
+.joint-app.panel-collapsed .resize-grip svg {
+    transform: rotate(180deg);
+}
+
+/* ---------------- 右侧属性面板 ---------------- */
+
+.right-container {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: var(--app-inspector-w);
+    bottom: var(--app-statusbar-h);
+    box-sizing: border-box;
+    overflow: auto;
+    background-color: var(--app-panel-bg);
+}
+
+.panel-section {
+    padding: .8rem .9rem 1rem;
+    border-bottom: 1px solid var(--app-border);
+}
+
+.panel-title {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    margin-bottom: .35rem;
+    font-size: .85rem;
+    font-weight: 700;
+    text-transform: none;
+}
+
+.panel-hint {
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: .6rem;
+}
+
+.right-container .form-label {
+    font-size: .78rem;
+    font-weight: 600;
+    margin-bottom: .2rem;
+}
+
+/* 当前模型中的元素名称（可点击填入） */
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    margin-top: .4rem;
+    min-height: 1.2rem;
+}
+
+.chip {
+    border: 1px solid var(--app-border);
+    background-color: var(--app-surface-bg);
+    color: var(--bs-body-color);
+    border-radius: 999px;
+    padding: .05rem .5rem;
+    font-size: .72rem;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.chip:hover {
+    border-color: var(--bs-primary);
+    color: var(--bs-primary);
+}
+
+.panel-accordion {
+    --bs-accordion-border-width: 0;
+}
+
+.panel-accordion .accordion-button {
+    padding: .6rem .9rem;
+    font-size: .82rem;
+    font-weight: 600;
+    background-color: var(--app-panel-bg);
+}
+
+.panel-accordion .accordion-body {
+    padding: .5rem .9rem 1rem;
+    font-size: .78rem;
+}
+
+.operator-table {
+    font-size: .78rem;
+}
+
+.operator-table code {
+    font-size: .78rem;
+}
+
+.operator-table td,
+.operator-table th {
+    padding: .25rem .35rem;
+}
+
+.flow-list {
+    padding-left: 1.1rem;
+    margin-bottom: 0;
+}
+
+.flow-list li {
+    margin-bottom: .25rem;
+}
+
+.shortcuts-table td {
+    vertical-align: middle;
+}
+
+/* ---------------- 底部状态栏 ---------------- */
+
+.bottom-container {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--app-statusbar-h);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: 0 .9rem;
+    box-sizing: border-box;
+    background-color: var(--app-header-bg);
+    border-top: 1px solid var(--app-border);
+    font-size: .8rem;
+    z-index: 10;
+}
+
+.status-badge {
+    flex: 0 0 auto;
+    padding: .05rem .5rem;
+    border-radius: 999px;
+    font-size: .7rem;
+    font-weight: 600;
+    color: #fff;
+    background-color: var(--bs-secondary);
+}
+
+#status {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 状态区出错时（ViewGen.js 会把字号调成红色文字）保持可读 */
+#status[style*="red"] {
+    font-weight: 600;
+}
+
+/* ViewGen.js 会写入 "black" / "red" 行内文字颜色，深色主题下需要修正 */
+[data-bs-theme="dark"] #status[style*="black"] {
+    color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] #status[style*="red"] {
+    color: #ff8a8a !important;
+}
+
+/* ---------------- 弹窗 / 提示 ---------------- */
+
+.toast-container {
+    /* 抬到状态栏上方，避免遮挡 */
+    bottom: calc(var(--app-statusbar-h) + 12px) !important;
+    z-index: 1080;
+}
+
+.modal-body h6 {
+    font-weight: 700;
+}
+
+.modal-body ul {
+    padding-left: 1.15rem;
+    margin-bottom: .5rem;
+}
+
+/* 主题切换按钮的图标：浅色下显示月亮，深色下显示太阳 */
+#themeToggle .icon-moon,
+#themeToggle .icon-sun {
+    flex: 0 0 auto;
+}
+
+#themeToggle .icon-sun {
+    display: none;
+}
+
+[data-bs-theme="dark"] #themeToggle .icon-moon {
+    display: none;
+}
+
+[data-bs-theme="dark"] #themeToggle .icon-sun {
+    display: inline-block;
+}
+
+/* 深色模式下迷你地图与画布的底色由 ui.js 同步重绘，这里给出兜底底色 */
+[data-bs-theme="dark"] {
+    --app-minimap-bg: rgba(49, 208, 198, .12);
+}
+
+/* ---------------- 窄屏适配 ---------------- */
+
+@media (max-width: 1100px) {
+    .brand-sub {
+        display: none;
+    }
+
+    .file-name-group {
+        max-width: 180px;
+    }
+}
+
+@media (max-width: 900px) {
+    .toolbar-row-main {
+        flex-wrap: wrap;
+    }
+
+    .brand-badge {
+        font-size: .95rem;
+    }
+}

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>logicsim · 逆波兰逻辑表达式绘图</title>
+    <link rel="icon" href="favicon.ico" />
+
+    <!-- 首屏渲染前先应用主题（localStorage 记忆 → 否则跟随系统偏好），避免深浅色闪烁 -->
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('logicsim-theme');
+                if (saved !== 'dark' && saved !== 'light') {
+                    saved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                document.documentElement.setAttribute('data-bs-theme', saved);
+            } catch (e) { /* 隐私模式下忽略 */ }
+        })();
+    </script>
+
+    <!-- 样式：Bootstrap 5（本地内置，离线可用）+ JointJS + 本项目主题 -->
+    <link rel="stylesheet" href="lib/bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="lib/joint.css" />
+    <link rel="stylesheet" type="text/css" href="style.css" />
+
+    <!-- 依赖：JointJS 1.x 运行在 jQuery + lodash + Backbone 之上，graphlib/dagre 提供分层布局 -->
+    <script src="lib/jquery.min.js"></script>
+    <script src="lib/lodash.min.js"></script>
+    <script src="lib/backbone.js"></script>
+    <script src="lib/graphlib.min.js"></script>
+    <script src="lib/dagre.min.js"></script>
+    <script src="lib/joint.js"></script>
+    <!-- Bootstrap 5 交互组件（弹窗 / 下拉 / 折叠面板 / Toast 提示） -->
+    <script src="lib/bootstrap.bundle.min.js"></script>
+
+    <!-- 纯算法层：后缀表达式解析 + 判决图生成（无 DOM 依赖） -->
+    <script src="LogicParser.js"></script>
+</head>
+
+<body>
+    <div class="joint-app">
+        <!-- ===================== 顶部：迷你地图 + 工具栏 ===================== -->
+        <header class="app-header">
+            <!-- 迷你地图必须固定在整个页面的左上角：ViewGen.js 的拖拽换算直接使用页面坐标 -->
+            <div class="mini-map">
+                <div id="mini-paper"></div>
+                <div id="mini-view">
+                    <div id="mini-resize" title="拖动缩放迷你地图"></div>
+                </div>
+            </div>
+
+            <div class="title-container">
+                <div class="toolbar">
+                    <!-- 第一行：文件与视图操作 -->
+                    <div class="toolbar-row">
+                        <span class="brand-badge">
+                            <span class="brand-dot"></span>logicsim
+                            <span class="brand-sub">逻辑表达式 → 选择器电路图</span>
+                        </span>
+
+                        <div class="btn-group btn-group-sm" role="group" aria-label="模型文件操作">
+                            <label class="btn btn-outline-secondary d-inline-flex align-items-center gap-1 mb-0"
+                                for="fileToLoad" title="从本地 JSON 文件载入图模型">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                    viewBox="0 0 16 16" aria-hidden="true">
+                                    <path
+                                        d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z" />
+                                    <path
+                                        d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z" />
+                                </svg>
+                                载入文本
+                                <input type="file" id="fileToLoad" accept=".json,application/json" hidden />
+                            </label>
+                            <button class="btn btn-outline-secondary d-inline-flex align-items-center gap-1"
+                                id="saveTextBtn" type="button" title="把当前图模型保存为本地 JSON 文件">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                    viewBox="0 0 16 16" aria-hidden="true">
+                                    <path
+                                        d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z" />
+                                    <path
+                                        d="M7.646 2.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 3.707V12.5a.5.5 0 0 1-1 0V3.707L5.354 5.854a.5.5 0 1 1-.708-.708l3-3z" />
+                                </svg>
+                                保存文本
+                            </button>
+                        </div>
+
+                        <div class="input-group input-group-sm file-name-group">
+                            <span class="input-group-text">文件名</span>
+                            <input class="form-control" id="inputFileNameToSaveAs" value="默认保存名称"
+                                aria-label="保存文件名" />
+                        </div>
+
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button"
+                                id="presetDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                示例表达式
+                            </button>
+                            <ul class="dropdown-menu" id="presetMenu" aria-labelledby="presetDropdown"></ul>
+                        </div>
+
+                        <div class="toolbar-spacer"></div>
+
+                        <button class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+                            id="themeToggle" type="button" title="切换深色 / 浅色主题">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                viewBox="0 0 16 16" aria-hidden="true" class="icon-moon">
+                                <path
+                                    d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z" />
+                            </svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                viewBox="0 0 16 16" aria-hidden="true" class="icon-sun">
+                                <path
+                                    d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z" />
+                            </svg>
+                            <span id="themeLabel">深色</span>
+                        </button>
+
+                        <button class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+                            id="helpBtn" type="button" data-bs-toggle="modal" data-bs-target="#helpModal">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                viewBox="0 0 16 16" aria-hidden="true">
+                                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z" />
+                                <path
+                                    d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z" />
+                            </svg>
+                            帮助
+                        </button>
+                    </div>
+
+                    <!-- 第二行：表达式 → 解析 → 图模型 → 出图 -->
+                    <div class="toolbar-row toolbar-row-main">
+                        <div class="pipeline-step">
+                            <label class="form-label" for="ReversePol">
+                                <span class="step-index">1</span>逆波兰逻辑表达式
+                            </label>
+                            <textarea class="form-control form-control-sm" id="ReversePol" rows="2" spellcheck="false"
+                                placeholder="例如：a b . fe >  （即「a 与 b 推出 fe」）"></textarea>
+                        </div>
+
+                        <button class="btn btn-warning pipeline-btn" id="parseBtn" type="button"
+                            title="把后缀表达式解析成图模型 JSON">
+                            <span class="step-index">2</span>解析文本
+                        </button>
+
+                        <div class="pipeline-step pipeline-step-model">
+                            <label class="form-label" for="myModel">
+                                <span class="step-index">3</span>图模型 JSON
+                                <span class="text-body-secondary fw-normal">（可手工编辑）</span>
+                            </label>
+                            <textarea class="form-control form-control-sm font-monospace" id="myModel" rows="2"
+                                spellcheck="false">{"nodeArray": [], "linkArray": []}</textarea>
+                        </div>
+
+                        <div class="btn-group-vertical pipeline-btn-group" role="group" aria-label="图与模型互转">
+                            <button class="btn btn-sm btn-success" id="loadBtn" type="button" title="按 JSON 模型渲染图形">
+                                <span class="step-index">4</span>文本转图
+                            </button>
+                            <button class="btn btn-sm btn-info" id="saveBtn" type="button" title="把当前图形导出为 JSON">
+                                图转文本
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ===================== 主体：画布 + 属性面板 + 状态栏 ===================== -->
+        <div class="app-body">
+            <div class="main-container">
+                <div id="paper-container">
+                    <div id="paper" style="cursor:grab"></div>
+                </div>
+                <div class="canvas-hint">滚轮缩放 · 拖动平移</div>
+                <!-- 空画布引导：仅在画布上没有元素时显示，具体切换逻辑在 ui.js -->
+                <div class="canvas-empty" id="canvasEmpty">
+                    <div class="canvas-empty-title">画布还是空的</div>
+                    <div>
+                        在 <b>1</b> 号框里输入逆波兰表达式，依次点「<b>解析文本</b>」和「<b>文本转图</b>」<br />
+                        或者直接在上方选一个「<b>示例表达式</b>」，一键出图
+                    </div>
+                </div>
+            </div>
+
+            <div id="app-resize" title="拖动调整右侧面板宽度（Alt + [ / Alt + ]）">
+                <div class="resize-grip" id="resizeToggle" role="button" tabindex="0" title="收起 / 展开右侧面板">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                        viewBox="0 0 16 16" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M8 3.5a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5z" />
+                    </svg>
+                </div>
+            </div>
+
+            <aside class="right-container">
+                <div class="panel-section">
+                    <h6 class="panel-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                            viewBox="0 0 16 16" aria-hidden="true">
+                            <path
+                                d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z" />
+                        </svg>
+                        元素属性
+                    </h6>
+                    <p class="panel-hint">在画布上单击一个节点即可编辑它的名称与备注。</p>
+
+                    <label class="form-label" for="ERName">元素名称<span class="text-body-secondary fw-normal">
+                            （每行一个，作为节点标签）</span></label>
+                    <textarea class="form-control form-control-sm" id="ERName" rows="2"
+                        placeholder="例如：载入位"></textarea>
+
+                    <div class="chip-row" id="elementNames" aria-label="当前模型中的元素名称"></div>
+
+                    <label class="form-label mt-2" for="ERMemo">元素备注</label>
+                    <textarea class="form-control form-control-sm" id="ERMemo" rows="2"
+                        placeholder="备注会作为鼠标悬停提示显示"></textarea>
+
+                    <button class="btn btn-warning btn-sm w-100 mt-2" id="nameBtn" type="button">保存修改</button>
+                </div>
+
+                <div class="accordion accordion-flush panel-accordion" id="helpAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#collapseOperators" aria-expanded="false"
+                                aria-controls="collapseOperators">
+                                运算符速查
+                            </button>
+                        </h2>
+                        <div id="collapseOperators" class="accordion-collapse collapse"
+                            data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                <table class="table table-sm operator-table mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>符号</th>
+                                            <th>写法</th>
+                                            <th>含义</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><code>.</code></td>
+                                            <td><code>a b .</code></td>
+                                            <td>逻辑与</td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>,</code></td>
+                                            <td><code>a b ,</code></td>
+                                            <td>逻辑或</td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&lt;</code></td>
+                                            <td><code>a &lt;</code></td>
+                                            <td>逻辑非</td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>&gt;</code></td>
+                                            <td><code>a b &gt;</code></td>
+                                            <td>推出（蕴含）</td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>=</code></td>
+                                            <td><code>a b =</code></td>
+                                            <td>等价（同或）</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#collapseFlow" aria-expanded="false" aria-controls="collapseFlow">
+                                使用流程
+                            </button>
+                        </h2>
+                        <div id="collapseFlow" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                <ol class="flow-list mb-0">
+                                    <li>在第 <b>1</b> 步的文本框里输入<b>逆波兰（后缀）</b>逻辑表达式。</li>
+                                    <li>点「<b>解析文本</b>」，把它转换成适合图形表示的 JSON 模型。</li>
+                                    <li>点「<b>文本转图</b>」，得到最终的选择器电路图。</li>
+                                    <li>点「<b>图转文本</b>」可把画布上的图形反向导出为 JSON。</li>
+                                    <li>用「<b>载入文本 / 保存文本</b>」把模型存成本地 <code>.json</code> 文件。</li>
+                                </ol>
+                                <p class="mb-0 mt-2">组合示例：<code>a b . fe &gt;</code> 即「a 与 b 推出 fe」；
+                                    <code>a b . fe ge &gt; =</code> 即「a 与 b 等价于 fe 推出 ge」。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="bottom-container">
+                <span class="status-badge" id="statusBadge">就绪</span>
+                <span id="status">Diagram Model loaded from Json Format.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== 帮助弹窗（Bootstrap Modal） ===================== -->
+    <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="helpModalLabel">logicsim 使用说明与快捷键</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>这个工具做什么</h6>
+                    <p>
+                        把<b>逆波兰逻辑表达式</b>翻译成由<b>二选一选择器（MUX）</b>构成的判决网络图：
+                        依据香农展开 <code>f = x'·f(x=0) + x·f(x=1)</code>，每个变量对应一层 <code>SEL</code> 节点，
+                        叶子是常量 <code>0</code>/<code>1</code>，最终汇入 <code>Out</code>。
+                        节点类型共 5 种：<code>0</code>、<code>1</code>、<code>Import</code>（变量）、<code>SEL</code>（选择器）、
+                        <code>Export</code>（输出）。
+                    </p>
+
+                    <h6 class="mt-3">画布操作</h6>
+                    <ul>
+                        <li><b>滚轮</b>：以鼠标位置为中心缩放</li>
+                        <li><b>拖动空白处</b>：平移画布</li>
+                        <li><b>鼠标悬停节点</b>：出现删除按钮与高亮边框，可删除</li>
+                        <li><b>单击节点</b>：在右侧「元素属性」中编辑名称与备注</li>
+                        <li><b>迷你地图</b>：拖动青色框移动视口，拖右下角圆点缩放迷你地图</li>
+                    </ul>
+
+                    <h6 class="mt-3">快捷键</h6>
+                    <table class="table table-sm shortcuts-table">
+                        <tbody>
+                            <tr>
+                                <td><kbd>Alt</kbd> + <kbd>↑</kbd></td>
+                                <td>放大</td>
+                                <td><kbd>Alt</kbd> + <kbd>↓</kbd></td>
+                                <td>缩小</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Alt</kbd> + <kbd>[</kbd></td>
+                                <td>收起 / 展开右侧面板</td>
+                                <td><kbd>Esc</kbd></td>
+                                <td>关闭本弹窗</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h6 class="mt-3">界面改造说明</h6>
+                    <p class="mb-0">
+                        本版本把原项目的 <code>w3.css</code> + <code>select2</code> 老式界面层升级为
+                        <b>Bootstrap 5.3</b>（本地内置、离线可用），新增深色主题、示例表达式下拉、状态提示与帮助弹窗，
+                        并修正了原布局的高度溢出问题；绘图内核（JointJS）与解析算法保持不变。
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">知道了</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 状态提示（Bootstrap Toast）：ui.js 监听 #status 变化后弹出 -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="statusToast" class="toast align-items-center border-0" role="alert" aria-live="polite"
+            aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="statusToastBody">就绪</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+                    aria-label="关闭"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 绘图与交互层（依赖上面的 DOM 与 JointJS，必须最后加载） -->
+    <script src="ViewGen.js"></script>
+    <!-- 新增的现代 UI 组件层：主题、示例、提示、快捷键 -->
+    <script src="ui.js"></script>
+</body>
+
+</html>
