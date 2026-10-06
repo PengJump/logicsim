@@ -5,6 +5,9 @@ pages:
   stage: deploy
   script:
     - echo "The site will be deployed to $CI_PAGES_URL"
+  # 显式声明这是一个 Pages 部署任务（默认发布仓库里的 public/ 目录）。
+  # 老式写法只靠“任务名叫 pages”，已被 GitLab 标记为废弃，补上该属性更稳妥。
+  pages: true
   artifacts:
     paths:
       - public
